@@ -1,12 +1,12 @@
 //
 //  MBProgressHUD.h
-//  Version 1.1.0
+//  Version 0.4
 //  Created by Matej Bukovinski on 2.4.09.
 //
 
 // This code is distributed under the terms and conditions of the MIT license. 
 
-// Copyright © 2009-2016 Matej Bukovinski
+// Copyright (c) 2009 Matej Bukovinski
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,384 +26,297 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <CoreGraphics/CoreGraphics.h>
 
-@class MBBackgroundView;
-@protocol MBProgressHUDDelegate;
+/////////////////////////////////////////////////////////////////////////////////////////////
 
-
-extern CGFloat const MBProgressMaxOffset;
-
-typedef NS_ENUM(NSInteger, MBProgressHUDMode) {
-    /// UIActivityIndicatorView.
+typedef enum {
+    /** Progress is shown using an UIActivityIndicatorView. This is the default. */
     MBProgressHUDModeIndeterminate,
-    /// A round, pie-chart like, progress view.
-    MBProgressHUDModeDeterminate,
-    /// Horizontal progress bar.
-    MBProgressHUDModeDeterminateHorizontalBar,
-    /// Ring-shaped progress view.
-    MBProgressHUDModeAnnularDeterminate,
-    /// Shows a custom view.
-    MBProgressHUDModeCustomView,
-    /// Shows only labels.
-    MBProgressHUDModeText
-};
+    /** Progress is shown using a MBRoundProgressView. */
+	MBProgressHUDModeDeterminate,
+	/** Shows a custom view */
+	MBProgressHUDModeCustomView
+} MBProgressHUDMode;
 
-typedef NS_ENUM(NSInteger, MBProgressHUDAnimation) {
-    /// Opacity animation
+typedef enum {
+    /** Opacity animation */
     MBProgressHUDAnimationFade,
-    /// Opacity + scale animation (zoom in when appearing zoom out when disappearing)
-    MBProgressHUDAnimationZoom,
-    /// Opacity + scale animation (zoom out style)
-    MBProgressHUDAnimationZoomOut,
-    /// Opacity + scale animation (zoom in style)
-    MBProgressHUDAnimationZoomIn
-};
+    /** Opacity + scale animation */
+    MBProgressHUDAnimationZoom
+} MBProgressHUDAnimation;
 
-typedef NS_ENUM(NSInteger, MBProgressHUDBackgroundStyle) {
-    /// Solid color background
-    MBProgressHUDBackgroundStyleSolidColor,
-    /// UIVisualEffectView or UIToolbar.layer background view
-    MBProgressHUDBackgroundStyleBlur
-};
+/////////////////////////////////////////////////////////////////////////////////////////////
 
-typedef void (^MBProgressHUDCompletionBlock)(void);
+@protocol MBProgressHUDDelegate <NSObject>
 
+@required
 
-NS_ASSUME_NONNULL_BEGIN
+/** 
+ * A callback function that is called after the HUD was fully hidden from the screen. 
+ */
+- (void)hudWasHidden;
 
+@end
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * A progress view for showing definite progress by filling up a circle (similar to the indicator for building in xcode).
+ */
+@interface MBRoundProgressView : UIProgressView {}
+
+/**
+ * Create a 37 by 37 pixel indicator. 
+ * This is the same size as used by the larger UIActivityIndicatorView.
+ */
+- (id)initWithDefaultSize;
+
+@end
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 
 /** 
  * Displays a simple HUD window containing a progress indicator and two optional labels for short messages.
  *
- * This is a simple drop-in class for displaying a progress HUD view similar to Apple's private UIProgressHUD class.
- * The MBProgressHUD window spans over the entire space given to it by the initWithFrame: constructor and catches all
- * user input on this region, thereby preventing the user operations on components below the view.
+ * This is a simple drop-in class for displaying a progress HUD view similar to Apples private UIProgressHUD class.
+ * The MBProgressHUD window spans over the entire space given to it by the initWithFrame constructor and catches all
+ * user input on this region, thereby preventing the user operations on components below the view. The HUD itself is
+ * drawn centered as a rounded semi-transparent view witch resizes depending on the user specified content.
  *
- * @note To still allow touches to pass through the HUD, you can set hud.userInteractionEnabled = NO.
- * @attention MBProgressHUD is a UI class and should therefore only be accessed on the main thread.
+ * This view supports three modes of operation:
+ * - MBProgressHUDModeIndeterminate - shows a UIActivityIndicatorView
+ * - MBProgressHUDModeDeterminate - shows a custom round progress indicator (MBRoundProgressView)
+ * - MBProgressHUDModeCustomView - shows an arbitrary, user specified view (@see customView)
+ *
+ * All three modes can have optional labels assigned:
+ * - If the labelText property is set and non-empty then a label containing the provided content is placed below the
+ *   indicator view.
+ * - If also the detailsLabelText property is set then another label is placed below the first label.
  */
-@interface MBProgressHUD : UIView
+@interface MBProgressHUD : UIView {
+	
+	MBProgressHUDMode mode;
+    MBProgressHUDAnimation animationType;
+	
+	SEL methodForExecution;
+	id targetForExecution;
+	id objectForExecution;
+	BOOL useAnimation;
+	
+    float yOffset;
+    float xOffset;
+	
+	float width;
+	float height;
+	
+	BOOL taskInProgress;
+	float graceTime;
+	float minShowTime;
+	NSTimer *graceTimer;
+	NSTimer *minShowTimer;
+	NSDate *showStarted;
+	
+	UIView *indicator;
+	UILabel *label;
+	UILabel *detailsLabel;
+	
+	float progress;
+	
+	id<MBProgressHUDDelegate> delegate;
+	NSString *labelText;
+	NSString *detailsLabelText;
+	float opacity;
+	UIFont *labelFont;
+	UIFont *detailsLabelFont;
+	
+    BOOL isFinished;
+	BOOL removeFromSuperViewOnHide;
+	
+	UIView *customView;
+	
+	CGAffineTransform rotationTransform;
+}
 
 /**
- * Creates a new HUD, adds it to provided view and shows it. The counterpart to this method is hideHUDForView:animated:.
- *
- * @note This method sets removeFromSuperViewOnHide. The HUD will automatically be removed from the view hierarchy when hidden.
- *
+ * Creates a new hud, adds it to provided view and shows it. The counterpart to this method is hideHUDForView:animated:.
+ * 
  * @param view The view that the HUD will be added to
- * @param animated If set to YES the HUD will appear using the current animationType. If set to NO the HUD will not use
- * animations while appearing.
+ * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
+ * animations while disappearing.
  * @return A reference to the created HUD.
  *
  * @see hideHUDForView:animated:
- * @see animationType
  */
-+ (instancetype)showHUDAddedTo:(UIView *)view animated:(BOOL)animated;
-
-/// @name Showing and hiding
++ (MBProgressHUD *)showHUDAddedTo:(UIView *)view animated:(BOOL)animated;
 
 /**
- * Finds the top-most HUD subview that hasn't finished and hides it. The counterpart to this method is showHUDAddedTo:animated:.
- *
- * @note This method sets removeFromSuperViewOnHide. The HUD will automatically be removed from the view hierarchy when hidden.
+ * Finds a HUD sibview and hides it. The counterpart to this method is showHUDAddedTo:animated:.
  *
  * @param view The view that is going to be searched for a HUD subview.
  * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
  * animations while disappearing.
- * @return YES if a HUD was found and removed, NO otherwise.
+ * @return YES if a HUD was found and removed, NO otherwise. 
  *
- * @see showHUDAddedTo:animated:
- * @see animationType
+ * @see hideHUDForView:animated:
  */
 + (BOOL)hideHUDForView:(UIView *)view animated:(BOOL)animated;
 
-/**
- * Finds the top-most HUD subview that hasn't finished and returns it.
+/** 
+ * A convenience constructor that initializes the HUD with the window's bounds. Calls the designated constructor with
+ * window.bounds as the parameter.
  *
- * @param view The view that is going to be searched.
- * @return A reference to the last HUD subview discovered.
+ * @param window The window instance that will provide the bounds for the HUD. Should probably be the same instance as
+ * the HUD's superview (i.e., the window that the HUD will be added to).
  */
-+ (nullable MBProgressHUD *)HUDForView:(UIView *)view;
+- (id)initWithWindow:(UIWindow *)window;
 
 /**
  * A convenience constructor that initializes the HUD with the view's bounds. Calls the designated constructor with
- * view.bounds as the parameter.
- *
- * @param view The view instance that will provide the bounds for the HUD. Should be the same instance as
+ * view.bounds as the parameter
+ * 
+ * @param view The view instance that will provide the bounds for the HUD. Should probably be the same instance as
  * the HUD's superview (i.e., the view that the HUD will be added to).
  */
-- (instancetype)initWithView:(UIView *)view;
-
-/** 
- * Displays the HUD. 
- *
- * @note You need to make sure that the main thread completes its run loop soon after this method call so that
- * the user interface can be updated. Call this method when your task is already set up to be executed in a new thread
- * (e.g., when using something like NSOperation or making an asynchronous call like NSURLRequest).
- *
- * @param animated If set to YES the HUD will appear using the current animationType. If set to NO the HUD will not use
- * animations while appearing.
- *
- * @see animationType
- */
-- (void)showAnimated:(BOOL)animated;
-
-/** 
- * Hides the HUD. This still calls the hudWasHidden: delegate. This is the counterpart of the show: method. Use it to
- * hide the HUD when your task completes.
- *
- * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
- * animations while disappearing.
- *
- * @see animationType
- */
-- (void)hideAnimated:(BOOL)animated;
-
-/** 
- * Hides the HUD after a delay. This still calls the hudWasHidden: delegate. This is the counterpart of the show: method. Use it to
- * hide the HUD when your task completes.
- *
- * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
- * animations while disappearing.
- * @param delay Delay in seconds until the HUD is hidden.
- *
- * @see animationType
- */
-- (void)hideAnimated:(BOOL)animated afterDelay:(NSTimeInterval)delay;
+- (id)initWithView:(UIView *)view;
 
 /**
- * The HUD delegate object. Receives HUD state notifications.
+ * The UIView (i.g., a UIIMageView) to be shown when the HUD is in MBProgressHUDModeCustomView.
+ * For best results use a 37 by 37 pixel view (so the bounds match the build in indicator bounds). 
  */
-@property (weak, nonatomic) id<MBProgressHUDDelegate> delegate;
+@property (retain) UIView *customView;
+
+/** 
+ * MBProgressHUD operation mode. Switches between indeterminate (MBProgressHUDModeIndeterminate) and determinate
+ * progress (MBProgressHUDModeDeterminate). The default is MBProgressHUDModeIndeterminate.
+ *
+ * @see MBProgressHUDMode
+ */
+@property (assign) MBProgressHUDMode mode;
 
 /**
- * Called after the HUD is hiden.
+ * The animation type that should be used when the HUD is shown and hidden. 
+ *
+ * @see MBProgressHUDAnimation
  */
-@property (copy, nullable) MBProgressHUDCompletionBlock completionBlock;
+@property (assign) MBProgressHUDAnimation animationType;
+
+/** 
+ * The HUD delegate object. If set the delegate will receive hudWasHidden callbacks when the HUD was hidden. The
+ * delegate should conform to the MBProgressHUDDelegate protocol and implement the hudWasHidden method. The delegate
+ * object will not be retained.
+ */
+@property (assign) id<MBProgressHUDDelegate> delegate;
+
+/** 
+ * An optional short message to be displayed below the activity indicator. The HUD is automatically resized to fit
+ * the entire text. If the text is too long it will get clipped by displaying "..." at the end. If left unchanged or
+ * set to @"", then no message is displayed.
+ */
+@property (copy) NSString *labelText;
+
+/** 
+ * An optional details message displayed below the labelText message. This message is displayed only if the labelText
+ * property is also set and is different from an empty string (@"").
+ */
+@property (copy) NSString *detailsLabelText;
+
+/** 
+ * The opacity of the HUD window. Defaults to 0.9 (90% opacity). 
+ */
+@property (assign) float opacity;
+
+/** 
+ * The x-axis offset of the HUD relative to the centre of the superview. 
+ */
+@property (assign) float xOffset;
+
+/** 
+ *The y-ayis offset of the HUD relative to the centre of the superview. 
+ */
+@property (assign) float yOffset;
 
 /*
- * Grace period is the time (in seconds) that the invoked method may be run without
- * showing the HUD. If the task finishes before the grace time runs out, the HUD will
- * not be shown at all.
+ * Grace period is the time (in seconds) that the invoked method may be run without 
+ * showing the HUD. If the task finishes befor the grace time runs out, the HUD will
+ * not be shown at all. 
  * This may be used to prevent HUD display for very short tasks.
  * Defaults to 0 (no grace time).
- * @note The graceTime needs to be set before the hud is shown. You thus can't use `showHUDAddedTo:animated:`,
- * but instead need to alloc / init the HUD, configure the grace time and than show it manually.
+ * Grace time functionality is only supported when the task status is known!
+ * @see taskInProgress
  */
-@property (assign, nonatomic) NSTimeInterval graceTime;
+@property (assign) float graceTime;
+
 
 /**
- * The minimum time (in seconds) that the HUD is shown.
+ * The minimum time (in seconds) that the HUD is shown. 
  * This avoids the problem of the HUD being shown and than instantly hidden.
  * Defaults to 0 (no minimum show time).
  */
-@property (assign, nonatomic) NSTimeInterval minShowTime;
+@property (assign) float minShowTime;
 
 /**
- * Removes the HUD from its parent view when hidden.
- * Defaults to NO.
+ * Indicates that the executed operation is in progress. Needed for correct graceTime operation.
+ * If you don't set a graceTime (different than 0.0) this does nothing.
+ * This property is automatically set when using showWhileExecuting:onTarget:withObject:animated:.
+ * When threading is done outside of the HUD (i.e., when the show: and hide: methods are used directly),
+ * you need to set this property when your task starts and completes in order to have normal graceTime 
+ * functunality.
  */
-@property (assign, nonatomic) BOOL removeFromSuperViewOnHide;
+@property (assign) BOOL taskInProgress;
 
-/// @name Appearance
+/**
+ * Removes the HUD from it's parent view when hidden. 
+ * Defaults to NO. 
+ */
+@property (assign) BOOL removeFromSuperViewOnHide;
 
 /** 
- * MBProgressHUD operation mode. The default is MBProgressHUDModeIndeterminate.
+ * Font to be used for the main label. Set this property if the default is not adequate. 
  */
-@property (assign, nonatomic) MBProgressHUDMode mode;
-
-/**
- * A color that gets forwarded to all labels and supported indicators. Also sets the tintColor
- * for custom views on iOS 7+. Set to nil to manage color individually.
- * Defaults to semi-translucent black on iOS 7 and later and white on earlier iOS versions.
- */
-@property (strong, nonatomic, nullable) UIColor *contentColor UI_APPEARANCE_SELECTOR;
-
-/**
- * The animation type that should be used when the HUD is shown and hidden.
- */
-@property (assign, nonatomic) MBProgressHUDAnimation animationType UI_APPEARANCE_SELECTOR;
-
-/**
- * The bezel offset relative to the center of the view. You can use MBProgressMaxOffset
- * and -MBProgressMaxOffset to move the HUD all the way to the screen edge in each direction.
- * E.g., CGPointMake(0.f, MBProgressMaxOffset) would position the HUD centered on the bottom edge.
- */
-@property (assign, nonatomic) CGPoint offset UI_APPEARANCE_SELECTOR;
-
-/**
- * The amount of space between the HUD edge and the HUD elements (labels, indicators or custom views).
- * This also represents the minimum bezel distance to the edge of the HUD view.
- * Defaults to 20.f
- */
-@property (assign, nonatomic) CGFloat margin UI_APPEARANCE_SELECTOR;
-
-/**
- * The minimum size of the HUD bezel. Defaults to CGSizeZero (no minimum size).
- */
-@property (assign, nonatomic) CGSize minSize UI_APPEARANCE_SELECTOR;
-
-/**
- * Force the HUD dimensions to be equal if possible.
- */
-@property (assign, nonatomic, getter = isSquare) BOOL square UI_APPEARANCE_SELECTOR;
-
-/**
- * When enabled, the bezel center gets slightly affected by the device accelerometer data.
- * Has no effect on iOS < 7.0. Defaults to YES.
- */
-@property (assign, nonatomic, getter=areDefaultMotionEffectsEnabled) BOOL defaultMotionEffectsEnabled UI_APPEARANCE_SELECTOR;
-
-/// @name Progress
-
-/**
- * The progress of the progress indicator, from 0.0 to 1.0. Defaults to 0.0.
- */
-@property (assign, nonatomic) float progress;
-
-/// @name ProgressObject
-
-/**
- * The NSProgress object feeding the progress information to the progress indicator.
- */
-@property (strong, nonatomic, nullable) NSProgress *progressObject;
-
-/// @name Views
-
-/**
- * The view containing the labels and indicator (or customView).
- */
-@property (strong, nonatomic, readonly) MBBackgroundView *bezelView;
-
-/**
- * View covering the entire HUD area, placed behind bezelView.
- */
-@property (strong, nonatomic, readonly) MBBackgroundView *backgroundView;
-
-/**
- * The UIView (e.g., a UIImageView) to be shown when the HUD is in MBProgressHUDModeCustomView.
- * The view should implement intrinsicContentSize for proper sizing. For best results use approximately 37 by 37 pixels.
- */
-@property (strong, nonatomic, nullable) UIView *customView;
-
-/**
- * A label that holds an optional short message to be displayed below the activity indicator. The HUD is automatically resized to fit
- * the entire text.
- */
-@property (strong, nonatomic, readonly) UILabel *label;
-
-/**
- * A label that holds an optional details message displayed below the labelText message. The details text can span multiple lines.
- */
-@property (strong, nonatomic, readonly) UILabel *detailsLabel;
-
-/**
- * A button that is placed below the labels. Visible only if a target / action is added. 
- */
-@property (strong, nonatomic, readonly) UIButton *button;
-
-@end
-
-
-@protocol MBProgressHUDDelegate <NSObject>
-
-@optional
+@property (retain) UIFont* labelFont;
 
 /** 
- * Called after the HUD was fully hidden from the screen. 
+ * Font to be used for the details label. Set this property if the default is not adequate. 
  */
-- (void)hudWasHidden:(MBProgressHUD *)hud;
+@property (retain) UIFont* detailsLabelFont;
+
+/** 
+ * The progress of the progress indicator, from 0.0 to 1.0. Defaults to 0.0. 
+ */
+@property (assign) float progress;
+
+/** 
+ * Display the HUD. You need to make sure that the main thread completes its run loop soon after this method call so
+ * the user interface can be updated. Call this method when your task is already set-up to be executed in a new thread
+ * (e.g., when using something like NSOperation or calling an asynchronous call like NSUrlRequest).
+ *
+ * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
+ * animations while disappearing.
+ */
+- (void)show:(BOOL)animated;
+
+/** 
+ * Hide the HUD, this still calls the hudWasHidden delegate. This is the counterpart of the hide: method. Use it to
+ * hide the HUD when your task completes.
+ *
+ * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
+ * animations while disappearing.
+ */
+- (void)hide:(BOOL)animated;
+
+/** 
+ * Shows the HUD while a background task is executing in a new thread, then hides the HUD.
+ *
+ * This method also takes care of NSAutoreleasePools so your method does not have to be concerned with setting up a
+ * pool.
+ *
+ * @param method The method to be executed while the HUD is shown. This method will be executed in a new thread.
+ * @param target The object that the target method belongs to.
+ * @param object An optional object to be passed to the method.
+ * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
+ * animations while disappearing.
+ */
+- (void)showWhileExecuting:(SEL)method onTarget:(id)target withObject:(id)object animated:(BOOL)animated;
 
 @end
-
-
-/**
- * A progress view for showing definite progress by filling up a circle (pie chart).
- */
-@interface MBRoundProgressView : UIView 
-
-/**
- * Progress (0.0 to 1.0)
- */
-@property (nonatomic, assign) float progress;
-
-/**
- * Indicator progress color.
- * Defaults to white [UIColor whiteColor].
- */
-@property (nonatomic, strong) UIColor *progressTintColor;
-
-/**
- * Indicator background (non-progress) color. 
- * Only applicable on iOS versions older than iOS 7.
- * Defaults to translucent white (alpha 0.1).
- */
-@property (nonatomic, strong) UIColor *backgroundTintColor;
-
-/*
- * Display mode - NO = round or YES = annular. Defaults to round.
- */
-@property (nonatomic, assign, getter = isAnnular) BOOL annular;
-
-@end
-
-
-/**
- * A flat bar progress view. 
- */
-@interface MBBarProgressView : UIView
-
-/**
- * Progress (0.0 to 1.0)
- */
-@property (nonatomic, assign) float progress;
-
-/**
- * Bar border line color.
- * Defaults to white [UIColor whiteColor].
- */
-@property (nonatomic, strong) UIColor *lineColor;
-
-/**
- * Bar background color.
- * Defaults to clear [UIColor clearColor];
- */
-@property (nonatomic, strong) UIColor *progressRemainingColor;
-
-/**
- * Bar progress color.
- * Defaults to white [UIColor whiteColor].
- */
-@property (nonatomic, strong) UIColor *progressColor;
-
-@end
-
-
-@interface MBBackgroundView : UIView
-
-/**
- * The background style. 
- * Defaults to MBProgressHUDBackgroundStyleBlur on iOS 7 or later and MBProgressHUDBackgroundStyleSolidColor otherwise.
- * @note Due to iOS 7 not supporting UIVisualEffectView, the blur effect differs slightly between iOS 7 and later versions.
- */
-@property (nonatomic) MBProgressHUDBackgroundStyle style;
-
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
-/**
- * The blur effect style, when using MBProgressHUDBackgroundStyleBlur.
- * Defaults to UIBlurEffectStyleLight.
- */
-@property (nonatomic) UIBlurEffectStyle blurEffectStyle;
-#endif
-
-/**
- * The background color or the blur tint color.
- * @note Due to iOS 7 not supporting UIVisualEffectView, the blur effect differs slightly between iOS 7 and later versions.
- */
-@property (nonatomic, strong) UIColor *color;
-
-@end
-
-NS_ASSUME_NONNULL_END
